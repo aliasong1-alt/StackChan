@@ -20,13 +20,14 @@ jobs:
 
       - name: Build firmware
         working-directory: firmware
-        run: idf.py build
-        env:
-          IDF_TARGET: esp32s3
+        run: |
+          . $IDF_PATH/export.sh
+          idf.py build
 
       - name: Create merged firmware binary
         working-directory: firmware
         run: |
+          . $IDF_PATH/export.sh
           python -m esptool --chip esp32s3 merge_bin \
             -o stackchan-dao.bin \
             --flash_mode qio \
