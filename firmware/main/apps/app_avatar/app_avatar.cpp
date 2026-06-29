@@ -12,6 +12,7 @@
 #include <smooth_lvgl.hpp>
 #include <stackchan/stackchan.h>
 #include <apps/common/common.h>
+#include <stackchan/modifiers/modifiers.h>
 #include <string_view>
 #include <cstdint>
 #include <memory>
@@ -23,6 +24,9 @@ using namespace stackchan;
 #include <string>
 #include <sstream>
 #include <unordered_set>
+
+static uint32_t _last_touch_report  = 0;
+static uint32_t _last_status_report = 0;
 
 static bool contains_word(const std::string& text, const std::unordered_set<std::string>& words)
 {
@@ -88,6 +92,25 @@ void AppAvatar::onOpen()
     avatar->init(lv_screen_active());
     avatar->getPanel()->onClick().connect([&]() { _screen_clicked_flag = true; });
     GetStackChan().attachAvatar(std::move(avatar));
+
+    // Load default modifiers for lifelike behavior
+    GetStackChan().addModifier(std::make_unique<BlinkModifier>());
+    GetStackChan().addModifier(std::make_unique<IdleExpressionModifier>());
+    GetStackChan().addModifier(std::make_unique<IdleMotionModifier>());
+    GetStackChan().addModifier(std::make_unique<HeadPetModifier>());
+
+    // Report head touch gestures to VPS
+    GetHAL().onHeadPetGesture.connect([&](HeadPetGesture gesture) {
+        const char* name = "unknown";
+        switch (gesture) {
+            case HeadPetGesture::Press: name = "press"; break;
+            case HeadPetGesture::Release: name = "release"; break;
+            case HeadPetGesture::SwipeForward: name = "swipe_forward"; break;
+            case HeadPetGesture::SwipeBackward: name = "swipe_backward"; break;
+            default: return;
+        }
+        GetHAL().sendWsText(fmt::format("{{\"type\":\"touch\",\"source\":\"head\",\"gesture\":\"{}\"}}", name));
+    });
 
     /* ------------------------------- BLE events ------------------------------- */
     GetHAL().onBleAvatarData.connect([&](const char* data) {
@@ -248,10 +271,21 @@ void AppAvatar::onRunning()
 
     if (_screen_clicked_flag) {
         _screen_clicked_flag = false;
+        GetHAL().sendWsText("{\"type\":\"touch\",\"source\":\"screen\"}");
         if (_dance_modifier_id >= 0) {
             GetStackChan().removeModifier(_dance_modifier_id);
             _dance_modifier_id = -1;
-            mclog::tagInfo(getAppInfo().name, "dance modifier removed");
+        }
+    }
+
+    // Periodic status report (every 30 seconds)
+    {
+        uint32_t now = GetHAL().millis();
+        if (now - _last_status_report > 30000) {
+            _last_status_report = now;
+            auto msg = fmt::format("{{\"type\":\"status\",\"battery\":{},\"uptime\":{}}}",
+                GetHAL().getBatteryLevel(), now / 1000);
+            GetHAL().sendWsText(msg);
         }
     }
 

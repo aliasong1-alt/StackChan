@@ -67,6 +67,12 @@ public:
 
         connect();
 
+        GetHAL().onWsSendText.connect([this](const std::string& text) {
+            if (isConnected()) {
+                _websocket->Send(text.c_str());
+            }
+        });
+
         GetHAL().onWsCallResponse.connect([this](bool accepted) {
             if (!isConnected()) {
                 return;
