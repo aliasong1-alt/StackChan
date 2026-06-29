@@ -63,7 +63,7 @@ public:
 
     void init()
     {
-        _url = fmt::format("{}/stackChan/ws?deviceType=StackChan", secret_logic::get_server_url());
+        _url = secret_logic::get_server_url();
 
         connect();
 
@@ -121,7 +121,7 @@ public:
             ESP_LOGI(_tag.c_str(), "Connected to server!");
             // GetHAL().onWsLog.emit(CommonLogLevel::Info, "Server connected");
             _last_heartbeat_time = GetHAL().millis();
-            _websocket->Send("{\"type\":\"hello\", \"msg\":\"Hello from StackChan!\"}");
+            _websocket->Send("{\"type\":\"hello\",\"device\":\"stackchan\",\"firmware\":\"dao-official-v1\",\"camera\":true}");
         });
 
         _websocket->OnDisconnected([this]() {
@@ -156,8 +156,8 @@ public:
         } else {
             processMessages();
 
-            // Check heartbeat timeout
-            if (GetHAL().millis() - _last_heartbeat_time > 10000) {
+            // Check heartbeat timeout (5 min for self-hosted VPS)
+            if (GetHAL().millis() - _last_heartbeat_time > 300000) {
                 ESP_LOGE(_tag.c_str(), "Heartbeat timeout!");
                 GetHAL().onWsLog.emit(CommonLogLevel::Error, "Heartbeat Timeout");
                 _last_heartbeat_time = GetHAL().millis();
@@ -366,7 +366,71 @@ public:
                     break;
             }
         } else {
-            ESP_LOGI(_tag.c_str(), "Received text: %.*s", (int)msg.data.size(), (char*)msg.data.data());
+            // JSON text commands from VPS server
+            std::string text(msg.data.begin(), msg.data.end());
+            ESP_LOGI(_tag.c_str(), "Received text: %s", text.c_str());
+
+            ArduinoJson::JsonDocument doc;
+            auto error = ArduinoJson::deserializeJson(doc, text);
+            if (error) return;
+
+            const char* msgType = doc["type"];
+            if (!msgType) return;
+
+            if (strcmp(msgType, "avatar") == 0) {
+                // Direct avatar control: {"type":"avatar", "leftEye":{...}, "mouth":{...}}
+                ArduinoJson::JsonDocument payload;
+                if (doc["leftEye"].is<ArduinoJson::JsonObject>()) payload["leftEye"] = doc["leftEye"];
+                if (doc["rightEye"].is<ArduinoJson::JsonObject>()) payload["rightEye"] = doc["rightEye"];
+                if (doc["mouth"].is<ArduinoJson::JsonObject>()) payload["mouth"] = doc["mouth"];
+                std::string out;
+                ArduinoJson::serializeJson(payload, out);
+                GetHAL().onWsAvatarData.emit(out);
+            }
+            else if (strcmp(msgType, "motion") == 0) {
+                // Direct motion control: {"type":"motion", "yawServo":{...}, "pitchServo":{...}}
+                ArduinoJson::JsonDocument payload;
+                if (doc["yawServo"].is<ArduinoJson::JsonObject>()) payload["yawServo"] = doc["yawServo"];
+                if (doc["pitchServo"].is<ArduinoJson::JsonObject>()) payload["pitchServo"] = doc["pitchServo"];
+                std::string out;
+                ArduinoJson::serializeJson(payload, out);
+                GetHAL().onWsMotionData.emit(out);
+            }
+            else if (strcmp(msgType, "text") == 0) {
+                // Display text: {"type":"text", "value":"hello", "name":"到"}
+                WsTextMessage_t text_msg;
+                text_msg.name = doc["name"] | "到";
+                text_msg.content = doc["value"] | "";
+                GetHAL().onWsTextMessage.emit(text_msg);
+            }
+            else if (strcmp(msgType, "dance") == 0) {
+                // Dance sequence: {"type":"dance", "sequence":[...]}
+                if (doc["sequence"].is<ArduinoJson::JsonArray>()) {
+                    std::string out;
+                    ArduinoJson::serializeJson(doc["sequence"], out);
+                    GetHAL().onWsDanceData.emit(out);
+                }
+            }
+            else if (strcmp(msgType, "camera_start") == 0) {
+                setStreamingEnabled(true);
+            }
+            else if (strcmp(msgType, "camera_stop") == 0) {
+                setStreamingEnabled(false);
+            }
+            else if (strcmp(msgType, "ping") == 0) {
+                _last_heartbeat_time = GetHAL().millis();
+                _websocket->Send("{\"type\":\"pong\"}");
+            }
+            else if (strcmp(msgType, "status") == 0) {
+                ArduinoJson::JsonDocument resp;
+                resp["type"] = "status";
+                resp["battery"] = GetHAL().getBatteryVoltage();
+                resp["uptime"] = GetHAL().millis() / 1000;
+                resp["camera"] = true;
+                std::string out;
+                ArduinoJson::serializeJson(resp, out);
+                _websocket->Send(out.c_str());
+            }
         }
     }
 

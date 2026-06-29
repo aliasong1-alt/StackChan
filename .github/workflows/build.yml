@@ -1,0 +1,47 @@
+name: Build StackChan Firmware
+
+on:
+  push:
+    branches: [dao]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: espressif/idf:v5.5.4
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch external dependencies
+        working-directory: firmware
+        run: python fetch_repos.py
+
+      - name: Build firmware
+        working-directory: firmware
+        run: idf.py build
+        env:
+          IDF_TARGET: esp32s3
+
+      - name: Create merged firmware binary
+        working-directory: firmware
+        run: |
+          python -m esptool --chip esp32s3 merge_bin \
+            -o stackchan-dao.bin \
+            --flash_mode qio \
+            --flash_size 16MB \
+            --flash_freq 80m \
+            0x0 build/bootloader/bootloader.bin \
+            0x8000 build/partition_table/partition-table.bin \
+            0x10000 build/stackchan.bin
+
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: stackchan-dao-firmware
+          path: |
+            firmware/stackchan-dao.bin
+            firmware/build/stackchan.bin
+            firmware/build/bootloader/bootloader.bin
+            firmware/build/partition_table/partition-table.bin
