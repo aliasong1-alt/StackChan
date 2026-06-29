@@ -93,13 +93,16 @@ void AppAvatar::onOpen()
     avatar->getPanel()->onClick().connect([&]() { _screen_clicked_flag = true; });
     GetStackChan().attachAvatar(std::move(avatar));
 
-    // Load default modifiers for lifelike behavior
+    // Load all modifiers for lifelike behavior
     GetStackChan().addModifier(std::make_unique<BlinkModifier>());
     GetStackChan().addModifier(std::make_unique<IdleExpressionModifier>());
     GetStackChan().addModifier(std::make_unique<IdleMotionModifier>());
     GetStackChan().addModifier(std::make_unique<HeadPetModifier>());
+    GetStackChan().addModifier(std::make_unique<BreathModifier>());
+    GetStackChan().addModifier(std::make_unique<ImuEventModifier>());
 
-    // Report head touch gestures to VPS
+    /* ---------------------- Sensor reporting to VPS ---------------------- */
+    // Head touch gestures
     GetHAL().onHeadPetGesture.connect([&](HeadPetGesture gesture) {
         const char* name = "unknown";
         switch (gesture) {
@@ -110,6 +113,17 @@ void AppAvatar::onOpen()
             default: return;
         }
         GetHAL().sendWsText(fmt::format("{{\"type\":\"touch\",\"source\":\"head\",\"gesture\":\"{}\"}}", name));
+    });
+
+    // IMU events (shake, pick up)
+    GetHAL().onImuMotionEvent.connect([&](ImuMotionEvent event) {
+        const char* name = "unknown";
+        switch (event) {
+            case ImuMotionEvent::Shake: name = "shake"; break;
+            case ImuMotionEvent::PickUp: name = "pickup"; break;
+            default: return;
+        }
+        GetHAL().sendWsText(fmt::format("{{\"type\":\"imu\",\"event\":\"{}\"}}", name));
     });
 
     /* ------------------------------- BLE events ------------------------------- */
@@ -283,8 +297,11 @@ void AppAvatar::onRunning()
         uint32_t now = GetHAL().millis();
         if (now - _last_status_report > 30000) {
             _last_status_report = now;
-            auto msg = fmt::format("{{\"type\":\"status\",\"battery\":{},\"uptime\":{}}}",
-                GetHAL().getBatteryLevel(), now / 1000);
+            auto msg = fmt::format(
+                "{{\"type\":\"status\",\"battery\":{},\"charging\":{},\"uptime\":{}}}",
+                GetHAL().getBatteryLevel(),
+                GetHAL().isBatteryCharging() ? "true" : "false",
+                now / 1000);
             GetHAL().sendWsText(msg);
         }
     }
@@ -307,6 +324,8 @@ void AppAvatar::onClose()
 
         GetHAL().onBleAvatarData.clear();
         GetHAL().onBleMotionData.clear();
+        GetHAL().onHeadPetGesture.clear();
+        GetHAL().onImuMotionEvent.clear();
 
         GetHAL().onWsAvatarData.clear();
         GetHAL().onWsMotionData.clear();
