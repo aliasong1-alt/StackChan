@@ -8,6 +8,7 @@
 #include <mooncake.h>
 #include <mooncake_log.h>
 #include <wifi_manager.h>
+#include <ssid_manager.h>
 #include <board.h>
 #include <mutex>
 #include <queue>
@@ -54,6 +55,17 @@ void Hal::startNetwork(std::function<void(std::string_view)> onLog)
     std::atomic<bool> network_connected = false;
 
     auto& board = Board::GetInstance();
+
+#if defined(CONFIG_STACKCHAN_DEFAULT_WIFI_SSID) && CONFIG_STACKCHAN_DEFAULT_WIFI_SSID[0] != '\0'
+    {
+        auto& ssidMgr = SsidManager::GetInstance();
+        if (ssidMgr.GetSsidList().empty()) {
+            mclog::tagInfo(_tag, "No saved WiFi, adding default SSID");
+            ssidMgr.AddSsid(CONFIG_STACKCHAN_DEFAULT_WIFI_SSID, CONFIG_STACKCHAN_DEFAULT_WIFI_PASSWORD);
+        }
+    }
+#endif
+
     mclog::tagInfo(_tag, "start and wait for network connected...");
 
     board.SetNetworkEventCallback([&network_connected, &onLog](NetworkEvent event, const std::string& data) {
