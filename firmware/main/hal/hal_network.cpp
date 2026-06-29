@@ -56,12 +56,15 @@ void Hal::startNetwork(std::function<void(std::string_view)> onLog)
 
     auto& board = Board::GetInstance();
 
-#if defined(CONFIG_STACKCHAN_DEFAULT_WIFI_SSID) && CONFIG_STACKCHAN_DEFAULT_WIFI_SSID[0] != '\0'
+#ifdef CONFIG_STACKCHAN_DEFAULT_WIFI_SSID
     {
-        auto& ssidMgr = SsidManager::GetInstance();
-        if (ssidMgr.GetSsidList().empty()) {
-            mclog::tagInfo(_tag, "No saved WiFi, adding default SSID");
-            ssidMgr.AddSsid(CONFIG_STACKCHAN_DEFAULT_WIFI_SSID, CONFIG_STACKCHAN_DEFAULT_WIFI_PASSWORD);
+        const char* default_ssid = CONFIG_STACKCHAN_DEFAULT_WIFI_SSID;
+        if (default_ssid[0] != '\0') {
+            auto& ssidMgr = SsidManager::GetInstance();
+            if (ssidMgr.GetSsidList().empty()) {
+                mclog::tagInfo(_tag, "No saved WiFi, adding default SSID");
+                ssidMgr.AddSsid(default_ssid, CONFIG_STACKCHAN_DEFAULT_WIFI_PASSWORD);
+            }
         }
     }
 #endif
