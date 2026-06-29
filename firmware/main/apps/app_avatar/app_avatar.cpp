@@ -95,8 +95,8 @@ void AppAvatar::onOpen()
 
     // Load all modifiers for lifelike behavior
     GetStackChan().addModifier(std::make_unique<BlinkModifier>());
-    GetStackChan().addModifier(std::make_unique<IdleExpressionModifier>());
-    GetStackChan().addModifier(std::make_unique<IdleMotionModifier>());
+    GetStackChan().addModifier(std::make_unique<IdleExpressionModifier>(4000, 10000));
+    GetStackChan().addModifier(std::make_unique<IdleMotionModifier>(15000, 30000));
     GetStackChan().addModifier(std::make_unique<HeadPetModifier>());
     GetStackChan().addModifier(std::make_unique<BreathModifier>());
     GetStackChan().addModifier(std::make_unique<ImuEventModifier>());
