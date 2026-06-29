@@ -424,7 +424,7 @@ public:
             else if (strcmp(msgType, "status") == 0) {
                 ArduinoJson::JsonDocument resp;
                 resp["type"] = "status";
-                resp["battery"] = GetHAL().getBatteryVoltage();
+                resp["battery"] = GetHAL().getBatteryLevel();
                 resp["uptime"] = GetHAL().millis() / 1000;
                 resp["camera"] = true;
                 std::string out;
