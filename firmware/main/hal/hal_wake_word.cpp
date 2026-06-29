@@ -55,44 +55,18 @@ static void _wake_word_task(void* param)
     codec->EnableInput(true);
     wake->Start();
 
-    size_t feed_size = wake->GetFeedSize();
-    if (feed_size == 0) feed_size = 512;
-    int channels = std::max(codec->input_channels(), 1);
-    size_t read_samples = feed_size * channels;
-
-    auto* buf = (int16_t*)heap_caps_malloc(read_samples * sizeof(int16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!buf) {
-        mclog::tagError(_tag, "failed to alloc audio buffer");
-        vTaskDelete(nullptr);
-        return;
-    }
-
-    std::vector<int16_t> mono(feed_size);
+    std::vector<int16_t> audio_data;
     uint32_t sound_report_tick = 0;
 
     _wake_running = true;
     while (_wake_running) {
-        int read = codec->Read(buf, read_samples);
-        if (read <= 0) {
+        if (!codec->InputData(audio_data) || audio_data.empty()) {
             vTaskDelay(pdMS_TO_TICKS(10));
             continue;
         }
 
-        // Downmix to mono if stereo
-        int mono_count = read / channels;
-        if (channels == 2) {
-            for (int i = 0; i < mono_count; i++) {
-                mono[i] = buf[i * 2];
-            }
-        } else {
-            for (int i = 0; i < mono_count; i++) {
-                mono[i] = buf[i];
-            }
-        }
-        mono.resize(mono_count);
-
         // Feed to wake word engine
-        wake->Feed(mono);
+        wake->Feed(audio_data);
 
         // Re-start detection after triggered (it auto-stops)
         if (!wake->GetLastDetectedWakeWord().empty()) {
@@ -106,19 +80,18 @@ static void _wake_word_task(void* param)
             sound_report_tick = now;
             int16_t peak = 0;
             int64_t sum = 0;
-            for (int i = 0; i < mono_count; i++) {
-                int16_t s = mono[i] < 0 ? -mono[i] : mono[i];
-                if (s > peak) peak = s;
-                sum += s;
+            for (auto s : audio_data) {
+                int16_t a = s < 0 ? -s : s;
+                if (a > peak) peak = a;
+                sum += a;
             }
-            int16_t avg = mono_count > 0 ? (int16_t)(sum / mono_count) : 0;
+            int16_t avg = audio_data.size() > 0 ? (int16_t)(sum / audio_data.size()) : 0;
             if (peak > 300) {
                 GetHAL().onSoundLevel.emit(peak, avg);
             }
         }
     }
 
-    heap_caps_free(buf);
     codec->EnableInput(false);
     mclog::tagInfo(_tag, "wake word task stopped");
     vTaskDelete(nullptr);
