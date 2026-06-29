@@ -41,8 +41,11 @@ private:
 
     std::unique_ptr<view::VideoWindow> _video_window;
 
-    bool _screen_clicked_flag = false;
-    int _dance_modifier_id    = -1;
+    bool _screen_clicked_flag  = false;
+    int _dance_modifier_id     = -1;
+    bool _mic_monitoring       = false;
+    uint32_t _last_sound_report = 0;
 
     void check_auto_angle_sync_mode();
+    void update_mic_monitor();
 };

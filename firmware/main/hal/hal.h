@@ -251,6 +251,7 @@ public:
     uitk::Signal<std::string_view> onWsDanceData;
     uitk::Signal<CommonLogLevel, std::string_view> onWsLog;
     uitk::Signal<std::string> onWsSendText;
+    uitk::Signal<bool> onMicMonitorToggle;
 
     void startWebSocketAvatarService(std::function<void(std::string_view)> onStartLog);
     void sendWsText(const std::string& text) { onWsSendText.emit(text); }

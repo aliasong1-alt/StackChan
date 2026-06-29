@@ -423,6 +423,37 @@ public:
             else if (strcmp(msgType, "camera_stop") == 0) {
                 setStreamingEnabled(false);
             }
+            else if (strcmp(msgType, "led") == 0) {
+                // LED control: {"type":"led","r":0,"g":20,"b":0} or {"type":"led","index":3,"r":255,"g":0,"b":0}
+                uint8_t r = doc["r"] | 0;
+                uint8_t g = doc["g"] | 0;
+                uint8_t b = doc["b"] | 0;
+                if (doc["index"].is<int>()) {
+                    int idx = doc["index"];
+                    if (idx >= 0 && idx < 12) {
+                        GetHAL().setRgbColor(idx, r, g, b);
+                        GetHAL().refreshRgb();
+                    }
+                } else {
+                    GetHAL().showRgbColor(r, g, b);
+                }
+            }
+            else if (strcmp(msgType, "led_off") == 0) {
+                GetHAL().showRgbColor(0, 0, 0);
+            }
+            else if (strcmp(msgType, "mic_on") == 0) {
+                GetHAL().onMicMonitorToggle.emit(true);
+                GetHAL().sendWsText("{\"type\":\"mic_ack\",\"status\":\"on\"}");
+            }
+            else if (strcmp(msgType, "mic_off") == 0) {
+                GetHAL().onMicMonitorToggle.emit(false);
+                GetHAL().sendWsText("{\"type\":\"mic_ack\",\"status\":\"off\"}");
+            }
+            else if (strcmp(msgType, "brightness") == 0) {
+                // Screen brightness: {"type":"brightness","value":128}
+                int val = doc["value"] | 128;
+                GetHAL().setBackLightBrightness(val);
+            }
             else if (strcmp(msgType, "ping") == 0) {
                 _last_heartbeat_time = GetHAL().millis();
                 _websocket->Send("{\"type\":\"pong\"}");
@@ -431,6 +462,7 @@ public:
                 ArduinoJson::JsonDocument resp;
                 resp["type"] = "status";
                 resp["battery"] = GetHAL().getBatteryLevel();
+                resp["charging"] = GetHAL().isBatteryCharging();
                 resp["uptime"] = GetHAL().millis() / 1000;
                 resp["camera"] = true;
                 std::string out;

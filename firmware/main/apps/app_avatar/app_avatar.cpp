@@ -115,6 +115,12 @@ void AppAvatar::onOpen()
         GetHAL().sendWsText(fmt::format("{{\"type\":\"touch\",\"source\":\"head\",\"gesture\":\"{}\"}}", name));
     });
 
+    // Mic monitoring toggle from VPS
+    _mic_monitoring = true; // enabled by default
+    GetHAL().onMicMonitorToggle.connect([&](bool enabled) {
+        _mic_monitoring = enabled;
+    });
+
     // IMU events (shake, pick up)
     GetHAL().onImuMotionEvent.connect([&](ImuMotionEvent event) {
         const char* name = "unknown";
@@ -306,10 +312,38 @@ void AppAvatar::onRunning()
         }
     }
 
+    update_mic_monitor();
+
     GetStackChan().update();
 
     view::update_home_indicator();
     view::update_status_bar();
+}
+
+void AppAvatar::update_mic_monitor()
+{
+    if (!_mic_monitoring) return;
+
+    uint32_t now = GetHAL().millis();
+    if (now - _last_sound_report < 500) return;
+    _last_sound_report = now;
+
+    std::vector<int16_t> waveform;
+    GetHAL().getMicWaveformFrame(waveform);
+    if (waveform.empty()) return;
+
+    int16_t peak = 0;
+    int64_t sum = 0;
+    for (auto s : waveform) {
+        int16_t abs_s = s < 0 ? -s : s;
+        if (abs_s > peak) peak = abs_s;
+        sum += (int64_t)abs_s;
+    }
+    int16_t avg = (int16_t)(sum / waveform.size());
+
+    if (peak > 500) {
+        GetHAL().sendWsText(fmt::format("{{\"type\":\"sound\",\"peak\":{},\"avg\":{}}}", peak, avg));
+    }
 }
 
 void AppAvatar::onClose()
@@ -326,6 +360,7 @@ void AppAvatar::onClose()
         GetHAL().onBleMotionData.clear();
         GetHAL().onHeadPetGesture.clear();
         GetHAL().onImuMotionEvent.clear();
+        GetHAL().onMicMonitorToggle.clear();
 
         GetHAL().onWsAvatarData.clear();
         GetHAL().onWsMotionData.clear();
