@@ -256,6 +256,11 @@ public:
     void startWebSocketAvatarService(std::function<void(std::string_view)> onStartLog);
     void sendWsText(const std::string& text) { onWsSendText.emit(text); }
 
+    /* ------------------------------- Wake Word ------------------------------- */
+    uitk::Signal<std::string> onWakeWordDetected;
+    uitk::Signal<int, int> onSoundLevel;
+    void startWakeWordService();
+
     /* ----------------------------------- IMU ---------------------------------- */
     uitk::Signal<ImuMotionEvent> onImuMotionEvent;
 

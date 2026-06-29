@@ -115,8 +115,24 @@ void AppAvatar::onOpen()
         GetHAL().sendWsText(fmt::format("{{\"type\":\"touch\",\"source\":\"head\",\"gesture\":\"{}\"}}", name));
     });
 
+    // Wake word detection
+    GetHAL().startWakeWordService();
+    GetHAL().onWakeWordDetected.connect([&](const std::string& word) {
+        GetHAL().sendWsText(fmt::format("{{\"type\":\"wake\",\"word\":\"{}\"}}", word));
+        GetHAL().showRgbColor(0, 30, 30);
+        {
+            LvglLockGuard lock;
+            GetStackChan().addModifier(std::make_unique<SpeakingModifier>(1500));
+        }
+        // LED off after 1.5 seconds (handled by timed modifier destroying itself)
+    });
+
+    // Sound level from wake word service → forward to VPS
+    GetHAL().onSoundLevel.connect([&](int peak, int avg) {
+        GetHAL().sendWsText(fmt::format("{{\"type\":\"sound\",\"peak\":{},\"avg\":{}}}", peak, avg));
+    });
+
     // Mic monitoring toggle from VPS
-    _mic_monitoring = true; // enabled by default
     GetHAL().onMicMonitorToggle.connect([&](bool enabled) {
         _mic_monitoring = enabled;
     });
@@ -312,8 +328,6 @@ void AppAvatar::onRunning()
         }
     }
 
-    update_mic_monitor();
-
     GetStackChan().update();
 
     view::update_home_indicator();
@@ -361,6 +375,8 @@ void AppAvatar::onClose()
         GetHAL().onHeadPetGesture.clear();
         GetHAL().onImuMotionEvent.clear();
         GetHAL().onMicMonitorToggle.clear();
+        GetHAL().onWakeWordDetected.clear();
+        GetHAL().onSoundLevel.clear();
 
         GetHAL().onWsAvatarData.clear();
         GetHAL().onWsMotionData.clear();
