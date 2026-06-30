@@ -408,11 +408,6 @@ void AppAvatar::onRunning()
             GetStackChan().removeModifier(_dance_modifier_id);
             _dance_modifier_id = -1;
         }
-        // Screen tap triggers voice recording
-        if (!_recording_active) {
-            xTaskCreatePinnedToCoreWithCaps(
-                _voice_record_task, "vrec", 1024 * 16, nullptr, 3, nullptr, 1, MALLOC_CAP_SPIRAM);
-        }
     }
 
     // Periodic status report (every 30 seconds)
