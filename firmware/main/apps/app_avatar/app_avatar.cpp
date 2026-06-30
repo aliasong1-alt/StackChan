@@ -24,9 +24,45 @@ using namespace stackchan;
 #include <string>
 #include <sstream>
 #include <unordered_set>
+#include <board.h>
+#include <audio/audio_codec.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <esp_heap_caps.h>
 
 static uint32_t _last_touch_report  = 0;
 static uint32_t _last_status_report = 0;
+
+struct VoicePlaybackArg {
+    int16_t* data;
+    size_t count;
+};
+
+static void _voice_playback_task(void* param)
+{
+    auto* arg = static_cast<VoicePlaybackArg*>(param);
+    auto& board = Board::GetInstance();
+    auto* codec = board.GetAudioCodec();
+
+    if (codec && arg->count > 0) {
+        codec->EnableOutput(true);
+
+        const size_t chunk_size = 512;
+        std::vector<int16_t> chunk;
+        for (size_t i = 0; i < arg->count; i += chunk_size) {
+            size_t n = std::min(chunk_size, arg->count - i);
+            chunk.assign(arg->data + i, arg->data + i + n);
+            codec->OutputData(chunk);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(200));
+        codec->EnableOutput(false);
+    }
+
+    heap_caps_free(arg->data);
+    delete arg;
+    vTaskDelete(nullptr);
+}
 
 static bool contains_word(const std::string& text, const std::unordered_set<std::string>& words)
 {
@@ -135,6 +171,27 @@ void AppAvatar::onOpen()
     // Mic monitoring toggle from VPS
     GetHAL().onMicMonitorToggle.connect([&](bool enabled) {
         _mic_monitoring = enabled;
+    });
+
+    // Voice audio playback from VPS
+    GetHAL().onVoiceAudioReceived.connect([&](std::vector<int16_t> audio) {
+        {
+            LvglLockGuard lock;
+            GetStackChan().addModifier(std::make_unique<SpeakingModifier>(audio.size() * 1000 / 24000));
+        }
+        GetHAL().showRgbColor(0, 30, 0); // green = speaking
+
+        auto* arg = new VoicePlaybackArg();
+        arg->count = audio.size();
+        arg->data = static_cast<int16_t*>(
+            heap_caps_malloc(audio.size() * sizeof(int16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+        if (arg->data) {
+            memcpy(arg->data, audio.data(), audio.size() * sizeof(int16_t));
+            xTaskCreatePinnedToCoreWithCaps(
+                _voice_playback_task, "vplay", 4096, arg, 2, nullptr, 1, MALLOC_CAP_SPIRAM);
+        } else {
+            delete arg;
+        }
     });
 
     // IMU events (shake, pick up)
@@ -377,6 +434,7 @@ void AppAvatar::onClose()
         GetHAL().onMicMonitorToggle.clear();
         GetHAL().onWakeWordDetected.clear();
         GetHAL().onSoundLevel.clear();
+        GetHAL().onVoiceAudioReceived.clear();
 
         GetHAL().onWsAvatarData.clear();
         GetHAL().onWsMotionData.clear();

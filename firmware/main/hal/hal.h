@@ -261,6 +261,10 @@ public:
     uitk::Signal<int, int> onSoundLevel;
     void startWakeWordService();
 
+    /* ------------------------------ Voice Chat ------------------------------ */
+    uitk::Signal<const std::vector<int16_t>&> onVoiceRecordingComplete;
+    uitk::Signal<std::vector<int16_t>> onVoiceAudioReceived;
+
     /* ----------------------------------- IMU ---------------------------------- */
     uitk::Signal<ImuMotionEvent> onImuMotionEvent;
 

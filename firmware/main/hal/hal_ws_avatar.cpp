@@ -54,6 +54,8 @@ public:
         DanceSequence     = 0x14,
         StartAudioStream  = 0x18,
         StopAudioStream   = 0x19,
+        VoiceUpload       = 0x20,
+        VoicePlayback     = 0x21,
     };
 
     struct ReceivedMessage {
@@ -70,6 +72,15 @@ public:
         GetHAL().onWsSendText.connect([this](const std::string& text) {
             if (isConnected()) {
                 _websocket->Send(text.c_str());
+            }
+        });
+
+        GetHAL().onVoiceRecordingComplete.connect([this](const std::vector<int16_t>& audio) {
+            if (isConnected()) {
+                sendPacket(DataType::VoiceUpload,
+                           reinterpret_cast<const uint8_t*>(audio.data()),
+                           audio.size() * sizeof(int16_t));
+                ESP_LOGI(_tag.c_str(), "Sent voice upload: %d samples", (int)audio.size());
             }
         });
 
@@ -359,6 +370,17 @@ public:
                         // ESP_LOGI(_tag.c_str(), "Dance Payload:\n%s", payload.c_str());
                         ESP_LOGI(_tag.c_str(), "DanceSequence size: %d", (int)payload.size());
                         GetHAL().onWsDanceData.emit(payload);
+                    }
+                    break;
+                }
+                case DataType::VoicePlayback: {
+                    if (msg.data.size() > 5) {
+                        size_t pcm_bytes = msg.data.size() - 5;
+                        size_t sample_count = pcm_bytes / sizeof(int16_t);
+                        std::vector<int16_t> audio(sample_count);
+                        memcpy(audio.data(), msg.data.data() + 5, pcm_bytes);
+                        ESP_LOGI(_tag.c_str(), "Voice playback received: %d samples", (int)sample_count);
+                        GetHAL().onVoiceAudioReceived.emit(std::move(audio));
                     }
                     break;
                 }

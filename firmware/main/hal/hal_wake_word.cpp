@@ -13,6 +13,7 @@
 #include <cmath>
 #include <vector>
 #include <atomic>
+#include <hal/board/config.h>
 
 #if defined(CONFIG_USE_CUSTOM_WAKE_WORD)
 #include <audio/wake_words/custom_wake_word.h>
@@ -68,9 +69,34 @@ static void _wake_word_task(void* param)
         // Feed to wake word engine
         wake->Feed(audio_data);
 
-        // Re-start detection after triggered (it auto-stops)
+        // After wake word: record audio and send to VPS
         if (!wake->GetLastDetectedWakeWord().empty()) {
-            vTaskDelay(pdMS_TO_TICKS(2000));
+            mclog::tagInfo(_tag, "Recording voice for VPS...");
+            GetHAL().showRgbColor(30, 10, 0); // orange = recording
+
+            const size_t input_channels = std::max(codec->input_channels(), 1);
+            const uint32_t record_ms = 4000;
+            std::vector<int16_t> recording;
+            recording.reserve(AUDIO_INPUT_SAMPLE_RATE * record_ms / 1000);
+
+            uint32_t record_start = GetHAL().millis();
+            std::vector<int16_t> rec_chunk;
+            while (GetHAL().millis() - record_start < record_ms) {
+                if (codec->InputData(rec_chunk) && !rec_chunk.empty()) {
+                    for (size_t i = 0; i < rec_chunk.size(); i += input_channels) {
+                        recording.push_back(rec_chunk[i]);
+                    }
+                } else {
+                    vTaskDelay(pdMS_TO_TICKS(10));
+                }
+            }
+
+            mclog::tagInfo(_tag, "Recording done: {} samples", recording.size());
+            GetHAL().showRgbColor(0, 0, 30); // blue = sending
+            GetHAL().onVoiceRecordingComplete.emit(recording);
+            GetHAL().showRgbColor(0, 0, 0);
+
+            vTaskDelay(pdMS_TO_TICKS(1000));
             wake->Start();
         }
 
