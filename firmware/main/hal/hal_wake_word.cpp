@@ -18,7 +18,10 @@
 #if defined(CONFIG_USE_CUSTOM_WAKE_WORD)
 #include <audio/wake_words/custom_wake_word.h>
 #define WAKE_WORD_CLASS CustomWakeWord
-#elif defined(CONFIG_USE_AFE_WAKE_WORD) || defined(CONFIG_USE_ESP_WAKE_WORD)
+#elif defined(CONFIG_USE_AFE_WAKE_WORD)
+#include <audio/wake_words/afe_wake_word.h>
+#define WAKE_WORD_CLASS AfeWakeWord
+#elif defined(CONFIG_USE_ESP_WAKE_WORD)
 #include <audio/wake_words/esp_wake_word.h>
 #define WAKE_WORD_CLASS EspWakeWord
 #endif
