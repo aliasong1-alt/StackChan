@@ -29,6 +29,7 @@ using namespace stackchan;
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <esp_heap_caps.h>
+#include <atomic>
 
 static uint32_t _last_touch_report  = 0;
 static uint32_t _last_status_report = 0;
@@ -37,6 +38,45 @@ struct VoicePlaybackArg {
     int16_t* data;
     size_t count;
 };
+
+static std::atomic<bool> _recording_active{false};
+
+static void _voice_record_task(void* param)
+{
+    if (_recording_active.exchange(true)) { vTaskDelete(nullptr); return; }
+
+    auto& board = Board::GetInstance();
+    auto* codec = board.GetAudioCodec();
+    if (!codec) { _recording_active = false; vTaskDelete(nullptr); return; }
+
+    GetHAL().sendWsText("{\"type\":\"wake\",\"word\":\"screen_tap\"}");
+    GetHAL().showRgbColor(30, 10, 0);
+
+    codec->EnableInput(true);
+    const size_t input_channels = std::max(codec->input_channels(), 1);
+    const uint32_t record_ms = 4000;
+    std::vector<int16_t> recording;
+    recording.reserve(24000 * record_ms / 1000);
+
+    uint32_t start = GetHAL().millis();
+    std::vector<int16_t> chunk;
+    while (GetHAL().millis() - start < record_ms) {
+        if (codec->InputData(chunk) && !chunk.empty()) {
+            for (size_t i = 0; i < chunk.size(); i += input_channels)
+                recording.push_back(chunk[i]);
+        } else {
+            vTaskDelay(pdMS_TO_TICKS(10));
+        }
+    }
+    codec->EnableInput(false);
+
+    GetHAL().showRgbColor(0, 0, 30);
+    GetHAL().onVoiceRecordingComplete.emit(recording);
+    GetHAL().showRgbColor(0, 0, 0);
+
+    _recording_active = false;
+    vTaskDelete(nullptr);
+}
 
 static void _voice_playback_task(void* param)
 {
@@ -368,6 +408,11 @@ void AppAvatar::onRunning()
         if (_dance_modifier_id >= 0) {
             GetStackChan().removeModifier(_dance_modifier_id);
             _dance_modifier_id = -1;
+        }
+        // Screen tap triggers voice recording
+        if (!_recording_active) {
+            xTaskCreatePinnedToCoreWithCaps(
+                _voice_record_task, "vrec", 1024 * 16, nullptr, 3, nullptr, 1, MALLOC_CAP_SPIRAM);
         }
     }
 
