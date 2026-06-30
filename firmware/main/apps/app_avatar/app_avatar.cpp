@@ -169,10 +169,9 @@ void AppAvatar::onOpen()
     avatar->getPanel()->onClick().connect([&]() { _screen_clicked_flag = true; });
     GetStackChan().attachAvatar(std::move(avatar));
 
-    // Load all modifiers for lifelike behavior
+    // Load modifiers (no IdleMotion — servo is noisy)
     GetStackChan().addModifier(std::make_unique<BlinkModifier>());
     GetStackChan().addModifier(std::make_unique<IdleExpressionModifier>(4000, 10000));
-    GetStackChan().addModifier(std::make_unique<IdleMotionModifier>(15000, 30000));
     GetStackChan().addModifier(std::make_unique<HeadPetModifier>());
     GetStackChan().addModifier(std::make_unique<BreathModifier>());
     GetStackChan().addModifier(std::make_unique<ImuEventModifier>());
@@ -429,6 +428,8 @@ void AppAvatar::onRunning()
             GetHAL().sendWsText(msg);
         }
     }
+
+    update_mic_monitor();
 
     GetStackChan().update();
 
