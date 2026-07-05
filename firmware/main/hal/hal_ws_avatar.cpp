@@ -458,10 +458,19 @@ public:
                     }
                 } else {
                     GetHAL().showRgbColor(r, g, b);
+                    GetStackChan().leftNeonLight().setColor(r, g, b);
+                    GetStackChan().rightNeonLight().setColor(r, g, b);
                 }
             }
             else if (strcmp(msgType, "led_off") == 0) {
                 GetHAL().showRgbColor(0, 0, 0);
+                GetStackChan().leftNeonLight().setColor(0, 0, 0);
+                GetStackChan().rightNeonLight().setColor(0, 0, 0);
+            }
+            else if (strcmp(msgType, "neonlight") == 0) {
+                std::string json;
+                ArduinoJson::serializeJson(doc, json);
+                GetStackChan().updateNeonLightFromJson(json.c_str());
             }
             else if (strcmp(msgType, "mic_on") == 0) {
                 GetHAL().onMicMonitorToggle.emit(true);
