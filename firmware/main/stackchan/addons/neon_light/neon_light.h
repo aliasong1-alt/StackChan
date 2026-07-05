@@ -5,17 +5,11 @@
  */
 #pragma once
 #include <cstdint>
-#include <smooth_ui_toolkit.hpp>
-#include <uitk/short_namespace.hpp>
-#include "core/color/color.hpp"
+#include <hal/hal.h>
 #include <string_view>
 
 namespace stackchan::addon {
 
-/**
- * @brief
- *
- */
 class NeonLight {
 public:
     NeonLight(int ledCount) : _led_count(ledCount)
@@ -26,7 +20,6 @@ public:
     void update();
 
     void setColor(uint8_t r, uint8_t g, uint8_t b);
-    void setColor(const uitk::color::Rgb_t& rgb);
     void setColor(uint32_t hex);
     void setColor(std::string_view hex);
     void setDuration(float durationSec);
@@ -41,16 +34,12 @@ protected:
 
 private:
     int _led_count;
-    bool _is_inited              = false;
-    bool _snap_to_target_on_rest = false;
-    uint32_t _last_tick          = 0;
-    uitk::color::AnimateRgb_t _color_anim;
+    bool _dirty = false;
+    uint8_t _r   = 0;
+    uint8_t _g   = 0;
+    uint8_t _b   = 0;
 };
 
-/**
- * @brief
- *
- */
 class LeftNeonLight : public NeonLight {
 public:
     LeftNeonLight() : NeonLight(6)
@@ -62,10 +51,6 @@ private:
     void refresh_rgb_impl() override;
 };
 
-/**
- * @brief
- *
- */
 class RightNeonLight : public NeonLight {
 public:
     RightNeonLight() : NeonLight(6)
