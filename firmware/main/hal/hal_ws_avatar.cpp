@@ -458,13 +458,17 @@ public:
                     }
                 } else {
                     GetHAL().showRgbColor(r, g, b);
+                    GetStackChan().leftNeonLight().setDuration(0.3f);
                     GetStackChan().leftNeonLight().setColor(r, g, b);
+                    GetStackChan().rightNeonLight().setDuration(0.3f);
                     GetStackChan().rightNeonLight().setColor(r, g, b);
                 }
             }
             else if (strcmp(msgType, "led_off") == 0) {
                 GetHAL().showRgbColor(0, 0, 0);
+                GetStackChan().leftNeonLight().setDuration(0.3f);
                 GetStackChan().leftNeonLight().setColor(0, 0, 0);
+                GetStackChan().rightNeonLight().setDuration(0.3f);
                 GetStackChan().rightNeonLight().setColor(0, 0, 0);
             }
             else if (strcmp(msgType, "neonlight") == 0) {
