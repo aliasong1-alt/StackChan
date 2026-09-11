@@ -10,6 +10,8 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <esp_heap_caps.h>
+#include <esp_partition.h>
+#include <esp_spiffs.h>
 #include <cmath>
 #include <vector>
 #include <atomic>
@@ -43,6 +45,31 @@ static void _wake_word_task(void* param)
         vTaskDelete(nullptr);
         return;
     }
+
+    // Pre-check the srmodel partition before esp-sr touches it: esp_srmodel_init
+    // aborts (ESP_ERROR_CHECK) on spiffs mount failure instead of returning, which
+    // turns an empty or mislabeled partition into a reboot loop. Fail soft here.
+    const esp_partition_t* model_part = esp_partition_find_first(
+        ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, "model");
+    if (model_part == nullptr) {
+        mclog::tagWarn(_tag, "no 'model' partition, wake word disabled");
+        vTaskDelete(nullptr);
+        return;
+    }
+    esp_vfs_spiffs_conf_t chk_conf = {
+        .base_path              = "/srmodel_chk",
+        .partition_label        = "model",
+        .max_files              = 1,
+        .format_if_mount_failed = false,
+    };
+    esp_err_t chk = esp_vfs_spiffs_register(&chk_conf);
+    if (chk != ESP_OK) {
+        mclog::tagWarn(_tag, "'model' partition not mountable ({}), wake word disabled",
+                       esp_err_to_name(chk));
+        vTaskDelete(nullptr);
+        return;
+    }
+    esp_vfs_spiffs_unregister("model");
 
     auto wake = std::make_unique<WAKE_WORD_CLASS>();
     if (!wake->Initialize(codec, nullptr)) {

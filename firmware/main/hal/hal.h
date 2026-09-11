@@ -152,13 +152,13 @@ public:
         _label_logo->setTextFont(&lv_font_montserrat_24);
         _label_logo->setTextColor(lv_color_hex(0xFFFFFF));
         _label_logo->align(LV_ALIGN_CENTER, 0, -14);
-        _label_logo->setText("STACKCHAN");
+        _label_logo->setText("dao");
 
         _label_msg = std::make_unique<uitk::lvgl_cpp::Label>(_panel->get());
         _label_msg->setTextFont(&lv_font_montserrat_16);
         _label_msg->setTextColor(lv_color_hex(0xBFBFBF));
         _label_msg->align(LV_ALIGN_CENTER, 0, 14);
-        _label_msg->setText("Starting up ...");
+        _label_msg->setText("here.");
 
         _label_version = std::make_unique<uitk::lvgl_cpp::Label>(_panel->get());
         _label_version->setTextFont(&lv_font_montserrat_14);

@@ -26,6 +26,8 @@ public:
         _signal_connection = GetHAL().onHeadPetGesture.connect([this](HeadPetGesture gesture) {
             if (gesture == HeadPetGesture::SwipeForward || gesture == HeadPetGesture::SwipeBackward) {
                 _event_swipe = true;
+            } else if (gesture == HeadPetGesture::Press) {
+                _event_press = true;
             } else if (gesture == HeadPetGesture::Release) {
                 _event_release = true;
             }
@@ -42,6 +44,17 @@ public:
         uint32_t now = GetHAL().millis();
 
         // 处理“被抚摸中”事件
+        // Press and hold: quietly narrow the eyes (no servo, dorm-quiet reaction)
+        if (_event_press) {
+            _event_press = false;
+            if (!_in_happy_state && !_in_cozy_state) {
+                _in_cozy_state = true;
+                _prev_emotion  = stackchan.avatar().getEmotion();
+                stackchan.avatar().setEmotion(avatar::Emotion::Sleepy);
+            }
+            _is_waiting_restore = false;
+        }
+
         if (_event_swipe) {
             _event_swipe = false;
             handle_swipe(stackchan);
@@ -52,7 +65,7 @@ public:
         // 处理“手松开”事件
         if (_event_release) {
             _event_release = false;
-            if (_in_happy_state) {
+            if (_in_happy_state || _in_cozy_state) {
                 _is_waiting_restore = true;
                 _restore_tick       = now + _restore_delay_ms;
             }
@@ -73,7 +86,10 @@ private:
         // 首次进入开心状态，记录原始信息
         if (!_in_happy_state) {
             _in_happy_state = true;
-            _prev_emotion   = avatar.getEmotion();
+            if (!_in_cozy_state) {
+                _prev_emotion = avatar.getEmotion();
+            }
+            _in_cozy_state  = false;  // swipe reaction takes over
             auto angles     = stackchan.motion().getCurrentAngles();
             _prev_yaw       = angles.x;
             _prev_pitch     = angles.y;
@@ -96,14 +112,17 @@ private:
 
     void restore_original_state(Modifiable& stackchan)
     {
-        if (!_in_happy_state) {
+        if (!_in_happy_state && !_in_cozy_state) {
             return;
         }
 
         stackchan.avatar().setEmotion(_prev_emotion);
-        stackchan.motion().moveWithSpeed(_prev_yaw, _prev_pitch, 200);
+        if (_in_happy_state) {
+            stackchan.motion().moveWithSpeed(_prev_yaw, _prev_pitch, 200);
+        }
 
         _in_happy_state = false;
+        _in_cozy_state  = false;
     }
 
     void perform_pet_motion(Modifiable& stackchan)
@@ -143,10 +162,12 @@ private:
     // 信号相关
     int _signal_connection;
     volatile bool _event_swipe   = false;
+    volatile bool _event_press   = false;
     volatile bool _event_release = false;
 
     // 状态机相关
     bool _in_happy_state     = false;
+    bool _in_cozy_state      = false;
     bool _is_waiting_restore = false;
     uint32_t _restore_tick   = 0;
     uint32_t _restore_delay_ms;
