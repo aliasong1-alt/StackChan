@@ -81,6 +81,15 @@ index ad61944..6b84daf 100644
  #if HAVE_LVGL
  #include "display/lcd_display.h"
  #include <spi_flash_mmap.h>
+@@ -17,7 +17,7 @@
+
+
+ #define TAG "Assets"
+-#define PARTITION_LABEL "assets"
++#define PARTITION_LABEL "model"
+
+ struct mmap_assets_table {
+     char asset_name[32];          /*!< Name of the asset */
 @@ -356,72 +356,72 @@ bool Assets::LvglStrategy::Apply(Assets* assets) {
  }
  #endif // HAVE_LVGL
